@@ -1,0 +1,188 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{cite}
+
+\title{Minimum-Cost Variance Reduction in Toroidal Inductor Manufacturing:%
+\\Surrogate Modeling, Convex Tightening, and a Generalized Nash View}
+
+\author{\IEEEauthorblockN{C\^{o}me Muntu-Quituba (213256232)}
+\IEEEauthorblockA{Southeast University\\
+Email: come.muntu-quituba@ensam.eu}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Manufacturing dispersion in geometric and material parameters propagates to inductance variability in toroidal coils, driving scrap and rework. Using a dataset of 200 manufactured coils (core cross-section $S$, mean magnetic path $l$, air-gap $e$, reluctivity proxy $\nu_r$, temperature $T$, wire section $S_c$, and measured inductance $L$), we (i) benchmark a data-driven linear surrogate against a one-parameter physics-inspired magnetic-circuit model, and (ii) design a minimum-cost process-tightening strategy that halves the standard deviation of $L$. Under a variance-propagation approximation, the tightening design is a convex program with closed-form primal updates and a one-dimensional dual search. The same solution is also obtained as a variational generalized Nash equilibrium (shared quality constraint) via primal--dual gradient play. On held-out tests, both surrogates achieve $R^2\approx0.93$ (RMSE $\approx4.1\times10^{-4}$~H). The optimal tightening concentrates on $\nu_r$ and $S$, reducing their standard deviations by about 59\% and 55\% and lowering the total tightening cost by 33\% versus uniform tightening.
+\end{abstract}
+
+\begin{IEEEkeywords}
+manufacturing quality, variance propagation, convex optimization, generalized Nash equilibrium, primal--dual methods
+\end{IEEEkeywords}
+
+\section{Introduction}
+Toroidal inductors are ubiquitous in electromechanical systems. In production, small dispersions in core geometry and material properties can induce significant variability in inductance, degrading compliance with design targets and increasing rework. In mechanical engineering terms, this is a process-design problem: decide where to invest manufacturing effort (tighter machining, improved metrology, stricter incoming material control) to reduce output variability at minimum cost.
+
+This project formulates and analyzes a mechanical-engineering optimization/game-theoretic problem using a real dataset of manufactured toroidal coils. Our objective is to \emph{allocate process-improvement effort across controllable inputs to halve the standard deviation of inductance}. Contributions:
+\begin{itemize}
+  \item \textbf{Surrogates:} comparison of a linear regression and a physics-inspired magnetic-circuit model.
+  \item \textbf{Optimization:} a convex variance-constrained tightening problem with an efficient dual-bisection solver.
+  \item \textbf{Game theory:} a shared-constraint generalized Nash equilibrium (GNE) view and a convergent primal--dual gradient-play method.
+\end{itemize}
+
+\section{Problem Formulation}
+\subsection{Inductance surrogates}
+Let $x=[S,l,e,\nu_r,T,S_c]^\top\in\mathbb{R}^6$ denote measured inputs and $L$ the measured inductance.
+We consider two baselines:
+\begin{align}
+\hat L_{\text{lin}}(x) &= \beta_0 + \beta^\top x, \label{eq:lin}\\
+\hat L_{\text{phys}}(x) &= k\,\frac{S}{l\nu_r+e}. \label{eq:phys}
+\end{align}
+Model \eqref{eq:phys} is motivated by a magnetic-circuit approximation where total reluctance scales as $(l\nu_r+e)/S$; the scalar $k$ is fit by least squares.
+
+\subsection{Variance-constrained process tightening}
+Assume each input $x_j$ has a current standard deviation $\sigma_j$ and the manufacturer can reduce it to $r_j\sigma_j$ with $r_j\in[r_{\min},1]$ (smaller $r_j$ means tighter control). Under weak dependence and the linear surrogate \eqref{eq:lin}, output variance is approximated by
+\begin{equation}
+\mathrm{Var}(L)\approx \sigma_\varepsilon^2 + \sum_{j=1}^6 a_j r_j^2, 
+\quad a_j:=\beta_j^2\mathrm{Var}(x_j),
+\label{eq:varprop}
+\end{equation}
+where $\sigma_\varepsilon^2$ is residual variance from \eqref{eq:lin}. The quality target is to halve the standard deviation of inductance:
+\begin{equation}
+\mathrm{Var}(L)\ \le\ \mathrm{Var}_{\text{target}} := \tfrac14\,\mathrm{Var}(L_{\text{current}}).
+\end{equation}
+
+Let $c_j>0$ denote the (engineering) cost weight of tightening input $j$. We solve the convex program~\cite{boyd}:
+\begin{align}
+\min_{r\in[r_{\min},1]^6}\quad & \sum_{j=1}^6 c_j(1-r_j)^2 \label{eq:opt}\\
+\text{s.t.}\quad & \sigma_\varepsilon^2 + \sum_{j=1}^6 a_j r_j^2 \le \mathrm{Var}_{\text{target}}. \nonumber
+\end{align}
+
+\subsection{Generalized Nash interpretation}
+Interpret each $r_j$ as controlled by a process owner (e.g., core machining for $S,l$, air-gap machining for $e$, supplier/material control for $\nu_r$, thermal control for $T$, winding for $S_c$). Each minimizes its local cost $c_j(1-r_j)^2$ subject to a \emph{shared} quality constraint \eqref{eq:opt}. This is a generalized Nash equilibrium (GNE) with shared constraint~\cite{facchinei}; the variational GNE coincides with the KKT solution of \eqref{eq:opt}.
+
+\section{Algorithms}
+\subsection{Closed-form primal update + 1D dual search}
+Introduce a Lagrange multiplier $\lambda\ge0$ for the variance constraint in \eqref{eq:opt}. Stationarity yields, for each $j$,
+\begin{equation}
+2c_j(r_j-1)+2\lambda a_j r_j = 0
+\ \Rightarrow\
+r_j(\lambda)=\Pi_{[r_{\min},1]}\!\left(\frac{c_j}{c_j+\lambda a_j}\right),
+\label{eq:r-lambda}
+\end{equation}
+with scalar projection $\Pi$. Define $\phi(\lambda)=\sum_j a_j r_j(\lambda)^2$, which is non-increasing in $\lambda$. If the constraint is active, $\lambda^\star$ is the unique value satisfying
+\begin{equation}
+\sigma_\varepsilon^2 + \phi(\lambda^\star)=\mathrm{Var}_{\text{target}}.
+\end{equation}
+We compute $\lambda^\star$ by bisection and obtain $r^\star=r(\lambda^\star)$ with complexity $O(d\log(1/\epsilon))$ for $d=6$.
+
+\subsection{Primal--dual gradient play (GNE solver)}
+A distributed-style solver is the projected primal--dual dynamics
+\begin{align}
+r_j^{t+1} &= \Pi_{[r_{\min},1]}\!\Big(r_j^t-\alpha\big(2c_j(r_j^t-1)+2\lambda^t a_j r_j^t\big)\Big),\label{eq:pd1}\\
+\lambda^{t+1} &= \Big[\lambda^t+\beta\big(\sigma_\varepsilon^2+\sum_j a_j(r_j^{t+1})^2-\mathrm{Var}_{\text{target}}\big)\Big]_+.\label{eq:pd2}
+\end{align}
+In experiments, \eqref{eq:pd1}--\eqref{eq:pd2} converges to the same $r^\star$ as the closed-form/dual method.
+
+\section{Experimental Analysis}
+\subsection{Data and preprocessing}
+The provided spreadsheet contains manufacturing measurements and inductance. We remove one blank row and two extreme outliers (orders-of-magnitude deviations in $S$ and $S_c$), yielding $n=200$ samples. We use a 75/25 train/test split (seed 42). 
+
+\subsection{Surrogate accuracy (baseline comparison)}
+Table~\ref{tab:pred} reports held-out performance. The physics-inspired model \eqref{eq:phys} slightly outperforms OLS despite fitting only one parameter, suggesting the dataset is broadly consistent with magnetic-circuit structure while linear regression remains useful for sensitivity/variance propagation.
+
+\begin{table}[t]
+\caption{Held-out predictive performance (test set).}
+\label{tab:pred}
+\centering
+\begin{tabular}{lcc}
+\toprule
+Model & $R^2$ & RMSE (H)\\
+\midrule
+OLS linear surrogate \eqref{eq:lin} & 0.929 & $4.16\times10^{-4}$\\
+Physics baseline \eqref{eq:phys} & 0.931 & $4.09\times10^{-4}$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Variance drivers}
+Using \eqref{eq:varprop} with OLS coefficients, Fig.~\ref{fig:contrib} reports the contributions $a_j$ to $\mathrm{Var}(L)$ (up to the common factor $r_j^2$). The dominant driver is $\nu_r$ (material), followed by $S$ (core cross-section). Geometric parameters $l$ and $e$ contribute less, and $T,S_c$ are negligible for this dataset.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig_contrib.png}
+\caption{Approximate contributions $a_j$ in \eqref{eq:varprop} (OLS-based).}
+\label{fig:contrib}
+\end{figure}
+
+\subsection{Tightening design and baselines}
+We set a representative cost vector
+$(c_S,c_l,c_e,c_{\nu_r},c_T,c_{S_c})=(2.0,1.5,1.0,5.0,0.1,1.0)$,
+reflecting that material-property control is typically more expensive than geometric tightening, and temperature has low leverage in this dataset.
+
+We compare three strategies that all satisfy $\mathrm{Std}(L)$ reduced by $\times2$:
+\textbf{(i) Optimal} solution of \eqref{eq:opt} via \eqref{eq:r-lambda} and bisection; 
+\textbf{(ii) Uniform tightening} $r_j=r$ for all $j$;
+\textbf{(iii) Top-2 tightening} only for the two dominant contributors ($\nu_r$ and $S$), others fixed at $r_j=1$.
+
+Table~\ref{tab:tight} shows the resulting tightening factors and costs. The optimal strategy concentrates on $\nu_r$ and $S$, achieving a 33\% lower cost than uniform tightening while meeting the same variance target. The top-2 strategy is close but slightly suboptimal because it ignores the cheaper marginal improvements available through modest tightening of $l$.
+
+\begin{table}[t]
+\caption{Tightening strategies to halve $\mathrm{Std}(L)$ (all feasible).}
+\label{tab:tight}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Strategy & $r_S$ & $r_l$ & $r_e$ & $r_{\nu_r}$ \\
+\midrule
+Optimal (convex) & 0.448 & 0.769 & 0.941 & 0.410 \\
+Uniform & 0.446 & 0.446 & 0.446 & 0.446 \\
+Top-2 only & 0.423 & 1.000 & 1.000 & 0.386 \\
+\bottomrule
+\end{tabular}
+
+\vspace{1mm}
+\begin{tabular}{lcc}
+\toprule
+Strategy & Cost $\sum c_j(1-r_j)^2$ & Cost ratio \\
+\midrule
+Optimal (convex) & 2.44 & 1.00 \\
+Uniform & 3.25 & 1.33 \\
+Top-2 only & 2.55 & 1.05 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{GNE computation}
+Fig.~\ref{fig:conv} shows that primal--dual gradient play \eqref{eq:pd1}--\eqref{eq:pd2} converges to the same optimum objective as the convex solver, consistent with the variational GNE/KKT equivalence for shared-constraint games.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig_convergence.png}
+\caption{Primal--dual gradient play objective converges to the convex optimum.}
+\label{fig:conv}
+\end{figure}
+
+\section{Conclusion}
+We formulated a mechanical-engineering quality-control problem for toroidal inductors as (i) a convex tightening design that minimizes the cost of halving inductance variability, and (ii) a shared-constraint generalized Nash game among process owners. Using real manufacturing data, we showed that a physics-inspired baseline and a linear surrogate both predict inductance accurately ($R^2\approx0.93$). The optimal tightening policy is sparse and interpretable, focusing primarily on controlling material reluctivity and core cross-section, and delivers a 33\% cost reduction versus uniform tightening. Future work includes nonlinear surrogates (interaction terms), explicit feasibility limits on achievable $r_j$, and robust tightening under distribution shift.
+
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{10}
+
+\bibitem{boyd}
+S.~Boyd and L.~Vandenberghe, \emph{Convex Optimization}.\hskip 1em plus
+  0.5em minus 0.4em\relax Cambridge University Press, 2004.
+
+\bibitem{facchinei}
+F.~Facchinei and C.~Kanzow, ``Generalized {N}ash equilibrium problems,''
+  \emph{4OR}, vol.~5, pp. 173--210, 2007.
+
+\bibitem{yang_ogl}
+S.~Yang, ``Optimization, game theory, and learning~\cite{yang_ogl},'' course slides (OGL2025), 2025.
+
+\end{thebibliography}
+\end{document}
