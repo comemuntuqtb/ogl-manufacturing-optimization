@@ -105,7 +105,7 @@ The primal-dual dynamics converge to the same optimum as the centralized solver.
   <img src="results/fig_convergence.png" width="48%" alt="Primal-dual convergence"/>
 </p>
 
-*Left: variance contributions vrf, S and L dominate. Right: primal-dual objective converges to the convex optimum.*
+*Left: variance contributions vrf, S and l dominate. Right: primal-dual objective converges to the convex optimum.*
 
 ---
 
